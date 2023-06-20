@@ -2336,3 +2336,44 @@ func testAlertmanagerCRDValidation(t *testing.T) {
 		})
 	}
 }
+
+// TestAlertmanagerConfigMatcherStrategy tests the AlertmanagerConfigMatcherStrategy for:
+// - "None".
+func testAlertmanagerConfigMatcherStrategy(t *testing.T) {
+	// Don't run Alertmanager tests in parallel. See
+	// https://github.com/prometheus/alertmanager/issues/1835 for details.
+	testCtx := framework.NewTestCtx(t)
+	defer testCtx.Cleanup(t)
+
+	ns := framework.CreateNamespace(context.Background(), t, testCtx)
+	framework.SetupPrometheusRBAC(context.Background(), t, testCtx, ns)
+
+	alertmanagerCR := framework.MakeBasicAlertmanager(ns, "user-am", 1)
+	alertmanagerCR.Spec.AlertmanagerConfigMatcherStrategy = monitoringv1.AlertmanagerConfigMatcherStrategy{
+		Type: "None",
+	}
+	alertmanagerCR, err := framework.CreateAlertmanagerAndWaitUntilReady(context.Background(), alertmanagerCR)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	alertmanagerConfigCR, err := framework.CreateAlertmanagerConfig(context.Background(), ns, "user-amconfig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	alertmanagerConfigCR.Spec.Route = &monitoringv1alpha1.Route{
+		Receiver: "default",
+		Matchers: []monitoringv1alpha1.Matcher{
+			{
+				Name:  "job",
+				Value: "test",
+			},
+		},
+	}
+
+	time.Sleep(10 * time.Second)
+	m := alertmanagerConfigCR.Spec.Route.Matchers
+	if len(m) != 1 && m[0].Name != "job" && m[0].Value != "test" {
+		t.Fatal("did not expect any additional matchers other than the ones specified in the AlertmanagerConfig")
+	}
+}
