@@ -1101,7 +1101,7 @@ func (c *Operator) selectAlertmanagerConfigs(ctx context.Context, am *monitoring
 				"namespace", am.Namespace,
 				"alertmanager", am.Name,
 			)
-			c.metrics.Recorder.Eventf(amc, v1.EventTypeWarning, "InvalidConfiguration", "AlertmanagerConfig %q/%q was rejected due to invalid configuration: %v", amc.GetNamespace(), amc.GetName(), err)
+			c.metrics.Recorder.Eventf(amc, v1.EventTypeWarning, "InvalidConfiguration", "AlertmanagerConfig %s/%s was rejected due to invalid configuration: %v", amc.GetNamespace(), amc.GetName(), err)
 			continue
 		}
 

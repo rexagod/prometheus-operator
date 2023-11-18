@@ -205,7 +205,7 @@ func (prs *PrometheusRuleSelector) Select(recorder record.EventRecorder, namespa
 				"prometheusrule", promRule.Name,
 				"namespace", promRule.Namespace,
 			)
-			recorder.Eventf(promRule, v1.EventTypeWarning, "InvalidConfiguration", "PrometheusRule %q/%q was rejected due to invalid configuration: %v", promRule.Namespace, promRule.Name, err)
+			recorder.Eventf(promRule, v1.EventTypeWarning, "InvalidConfiguration", "PrometheusRule %s/%s was rejected due to invalid configuration: %v", promRule.Namespace, promRule.Name, err)
 			continue
 		}
 
