@@ -19,6 +19,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/prometheus-operator/prometheus-operator/pkg/client/versioned/scheme"
+	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 	"path"
 	"regexp"
 	"strings"
@@ -95,6 +98,9 @@ type Operator struct {
 	canReadStorageClass bool
 
 	config Config
+
+	// Emit events for critical metric changes.
+	recorder record.EventRecorder
 }
 
 type Config struct {
@@ -130,6 +136,15 @@ func New(ctx context.Context, restConfig *rest.Config, c operator.Config, logger
 	// All the metrics exposed by the controller get the controller="alertmanager" label.
 	r = prometheus.WrapRegistererWith(prometheus.Labels{"controller": "alertmanager"}, r)
 
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartStructuredLogging(0)
+
+	// Exclude initialization when testing.
+	if client != nil {
+		eventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{Interface: client.CoreV1().Events("")})
+	}
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "prometheus-operator"})
+
 	o := &Operator{
 		kclient:    client,
 		mdClient:   mdClient,
@@ -139,7 +154,7 @@ func New(ctx context.Context, restConfig *rest.Config, c operator.Config, logger
 		logger:   logger,
 		accessor: operator.NewAccessor(logger),
 
-		metrics:             operator.NewMetrics(client, r),
+		metrics:             operator.NewMetrics(r),
 		reconciliations:     &operator.ReconciliationTracker{},
 		canReadStorageClass: canReadStorageClass,
 		config: Config{
@@ -154,6 +169,8 @@ func New(ctx context.Context, restConfig *rest.Config, c operator.Config, logger
 			AlertManagerSelector:         c.AlertManagerSelector,
 			SecretListWatchSelector:      c.SecretListWatchSelector,
 		},
+
+		recorder: recorder,
 	}
 
 	o.rr = operator.NewResourceReconciler(
@@ -1101,7 +1118,7 @@ func (c *Operator) selectAlertmanagerConfigs(ctx context.Context, am *monitoring
 				"namespace", am.Namespace,
 				"alertmanager", am.Name,
 			)
-			c.metrics.Recorder.Eventf(amc, v1.EventTypeWarning, "InvalidConfiguration", "AlertmanagerConfig %s/%s was rejected due to invalid configuration: %v", amc.GetNamespace(), amc.GetName(), err)
+			c.recorder.Eventf(amc, v1.EventTypeWarning, "InvalidConfiguration", "AlertmanagerConfig %s/%s was rejected due to invalid configuration: %v", amc.GetNamespace(), amc.GetName(), err)
 			continue
 		}
 

@@ -17,6 +17,9 @@ package prometheus
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus-operator/prometheus-operator/pkg/client/versioned/scheme"
+	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 	"strings"
 	"time"
 
@@ -93,6 +96,8 @@ type Operator struct {
 	canReadStorageClass    bool
 
 	statusReporter prompkg.StatusReporter
+
+	recorder record.EventRecorder
 }
 
 // New creates a new controller.
@@ -138,6 +143,15 @@ func New(ctx context.Context, restConfig *rest.Config, conf operator.Config, log
 	// All the metrics exposed by the controller get the controller="prometheus" label.
 	r = prometheus.WrapRegistererWith(prometheus.Labels{"controller": "prometheus"}, r)
 
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartStructuredLogging(0)
+
+	// Exclude initialization when testing.
+	if client != nil {
+		eventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{Interface: client.CoreV1().Events("")})
+	}
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "prometheus-operator"})
+
 	c := &Operator{
 		kclient:                client,
 		mdClient:               mdClient,
@@ -148,7 +162,7 @@ func New(ctx context.Context, restConfig *rest.Config, conf operator.Config, log
 		kubeletObjectNamespace: kubeletObjectNamespace,
 		kubeletSyncEnabled:     kubeletSyncEnabled,
 		config:                 conf,
-		metrics:                operator.NewMetrics(client, r),
+		metrics:                operator.NewMetrics(r),
 		reconciliations:        &operator.ReconciliationTracker{},
 		nodeAddressLookupErrors: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "prometheus_operator_node_address_lookup_errors_total",
@@ -164,6 +178,7 @@ func New(ctx context.Context, restConfig *rest.Config, conf operator.Config, log
 		}),
 		scrapeConfigSupported: scrapeConfigSupported,
 		canReadStorageClass:   canReadStorageClass,
+		recorder:              recorder,
 	}
 	c.metrics.MustRegister(
 		c.nodeAddressLookupErrors,
@@ -1483,7 +1498,7 @@ func (c *Operator) createOrUpdateConfigurationSecret(ctx context.Context, p *mon
 		return nil
 	}
 
-	resourceSelector := prompkg.NewResourceSelector(c.logger, p, store, c.nsMonInf, c.metrics)
+	resourceSelector := prompkg.NewResourceSelector(c.logger, p, store, c.nsMonInf, c.metrics, c.recorder)
 
 	smons, err := resourceSelector.SelectServiceMonitors(ctx, c.smonInfs.ListAllByNamespace)
 	if err != nil {

@@ -576,7 +576,8 @@ func TestSelectProbes(t *testing.T) {
 				&monitoringv1.Prometheus{},
 				nil,
 				nil,
-				operator.NewMetrics(nil, prometheus.NewPedanticRegistry()),
+				operator.NewMetrics(prometheus.NewPedanticRegistry()),
+				nil,
 			)
 
 			probe := &monitoringv1.Probe{
@@ -770,7 +771,8 @@ func TestSelectServiceMonitors(t *testing.T) {
 				&monitoringv1.Prometheus{},
 				nil,
 				nil,
-				operator.NewMetrics(nil, prometheus.NewPedanticRegistry()),
+				operator.NewMetrics(prometheus.NewPedanticRegistry()),
+				nil,
 			)
 
 			sm := &monitoringv1.ServiceMonitor{
@@ -870,7 +872,8 @@ func TestSelectPodMonitors(t *testing.T) {
 				&monitoringv1.Prometheus{},
 				nil,
 				nil,
-				operator.NewMetrics(nil, prometheus.NewPedanticRegistry()),
+				operator.NewMetrics(prometheus.NewPedanticRegistry()),
+				nil,
 			)
 
 			pm := &monitoringv1.PodMonitor{
@@ -1289,7 +1292,8 @@ func TestSelectScrapeConfigs(t *testing.T) {
 				},
 				assets.NewStore(cs.CoreV1(), cs.CoreV1()),
 				nil,
-				operator.NewMetrics(nil, prometheus.NewPedanticRegistry()),
+				operator.NewMetrics(prometheus.NewPedanticRegistry()),
+				nil,
 			)
 
 			sc := &monitoringv1alpha1.ScrapeConfig{

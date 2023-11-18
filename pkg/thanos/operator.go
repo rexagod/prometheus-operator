@@ -17,6 +17,9 @@ package thanos
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus-operator/prometheus-operator/pkg/client/versioned/scheme"
+	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 	"strings"
 	"time"
 
@@ -74,6 +77,8 @@ type Operator struct {
 	canReadStorageClass bool
 
 	config Config
+
+	recorder record.EventRecorder
 }
 
 // Config defines configuration parameters for the Operator.
@@ -114,13 +119,22 @@ func New(ctx context.Context, restConfig *rest.Config, conf operator.Config, log
 	// All the metrics exposed by the controller get the controller="thanos" label.
 	r = prometheus.WrapRegistererWith(prometheus.Labels{"controller": "thanos"}, r)
 
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartStructuredLogging(0)
+
+	// Exclude initialization when testing.
+	if client != nil {
+		eventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{Interface: client.CoreV1().Events("")})
+	}
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "prometheus-operator"})
+
 	o := &Operator{
 		kclient:             client,
 		mdClient:            mdClient,
 		mclient:             mclient,
 		logger:              logger,
 		accessor:            operator.NewAccessor(logger),
-		metrics:             operator.NewMetrics(client, r),
+		metrics:             operator.NewMetrics(r),
 		reconciliations:     &operator.ReconciliationTracker{},
 		canReadStorageClass: canReadStorageClass,
 		config: Config{
@@ -135,6 +149,7 @@ func New(ctx context.Context, restConfig *rest.Config, conf operator.Config, log
 			LogFormat:              conf.LogFormat,
 			ThanosRulerSelector:    conf.ThanosRulerSelector,
 		},
+		recorder: recorder,
 	}
 
 	o.rr = operator.NewResourceReconciler(

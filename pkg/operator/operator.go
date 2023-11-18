@@ -22,19 +22,13 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
-	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
-
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/prometheus-operator/prometheus-operator/pkg/client/versioned/scheme"
 )
 
 const PrometheusOperatorFieldManager = "PrometheusOperator"
@@ -206,9 +200,6 @@ type Metrics struct {
 	// mtx protects all fields below.
 	mtx       sync.RWMutex
 	resources map[resourceKey]map[string]int
-
-	// Emit events for critical metric changes.
-	Recorder record.EventRecorder
 }
 
 type resourceKey struct {
@@ -217,16 +208,7 @@ type resourceKey struct {
 }
 
 // NewMetrics initializes operator metrics and registers them with the given registerer.
-func NewMetrics(client kubernetes.Interface, r prometheus.Registerer) *Metrics {
-
-	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartStructuredLogging(0)
-
-	// Exclude initialization when testing.
-	if client != nil {
-		eventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{Interface: client.CoreV1().Events("")})
-	}
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "prometheus-operator"})
+func NewMetrics(r prometheus.Registerer) *Metrics {
 
 	m := Metrics{
 		reg: r,
@@ -261,8 +243,6 @@ func NewMetrics(client kubernetes.Interface, r prometheus.Registerer) *Metrics {
 		}),
 
 		resources: make(map[resourceKey]map[string]int),
-
-		Recorder: recorder,
 	}
 
 	m.reg.MustRegister(

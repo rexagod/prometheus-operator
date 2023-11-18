@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/client-go/tools/record"
 	"regexp"
 	"strings"
 
@@ -48,11 +49,12 @@ type ResourceSelector struct {
 	namespaceInformers cache.SharedIndexInformer
 	metrics            *operator.Metrics
 	accessor           *operator.Accessor
+	recorder           record.EventRecorder
 }
 
 type ListAllByNamespaceFn func(namespace string, selector labels.Selector, appendFn cache.AppendFunc) error
 
-func NewResourceSelector(l log.Logger, p monitoringv1.PrometheusInterface, store *assets.Store, namespaceInformers cache.SharedIndexInformer, metrics *operator.Metrics) *ResourceSelector {
+func NewResourceSelector(l log.Logger, p monitoringv1.PrometheusInterface, store *assets.Store, namespaceInformers cache.SharedIndexInformer, metrics *operator.Metrics, recorder record.EventRecorder) *ResourceSelector {
 	return &ResourceSelector{
 		l:                  l,
 		p:                  p,
@@ -60,6 +62,7 @@ func NewResourceSelector(l log.Logger, p monitoringv1.PrometheusInterface, store
 		namespaceInformers: namespaceInformers,
 		metrics:            metrics,
 		accessor:           operator.NewAccessor(l),
+		recorder:           recorder,
 	}
 }
 
@@ -176,7 +179,7 @@ func (rs *ResourceSelector) SelectServiceMonitors(ctx context.Context, listFn Li
 				"namespace", objMeta.GetNamespace(),
 				"prometheus", objMeta.GetName(),
 			)
-			rs.metrics.Recorder.Eventf(sm, v1.EventTypeWarning, "InvalidConfiguration", "ServiceMonitor %s/%s was rejected due to invalid configuration: %v", sm.GetNamespace(), sm.GetName(), err)
+			rs.recorder.Eventf(sm, v1.EventTypeWarning, "InvalidConfiguration", "ServiceMonitor %s/%s was rejected due to invalid configuration: %v", sm.GetNamespace(), sm.GetName(), err)
 			continue
 		}
 
@@ -426,7 +429,7 @@ func (rs *ResourceSelector) SelectPodMonitors(ctx context.Context, listFn ListAl
 				"namespace", objMeta.GetNamespace(),
 				"prometheus", objMeta.GetName(),
 			)
-			rs.metrics.Recorder.Eventf(pm, v1.EventTypeWarning, "InvalidConfiguration", "PodMonitor %s/%s was rejected due to invalid configuration: %v", pm.GetNamespace(), pm.GetName(), err)
+			rs.recorder.Eventf(pm, v1.EventTypeWarning, "InvalidConfiguration", "PodMonitor %s/%s was rejected due to invalid configuration: %v", pm.GetNamespace(), pm.GetName(), err)
 			continue
 		}
 
@@ -508,7 +511,7 @@ func (rs *ResourceSelector) SelectProbes(ctx context.Context, listFn ListAllByNa
 				"namespace", objMeta.GetNamespace(),
 				"prometheus", objMeta.GetName(),
 			)
-			rs.metrics.Recorder.Eventf(probe, v1.EventTypeWarning, "InvalidConfiguration", "Probe %s/%s was rejected due to invalid configuration: %v", probe.GetNamespace(), probe.GetName(), err)
+			rs.recorder.Eventf(probe, v1.EventTypeWarning, "InvalidConfiguration", "Probe %s/%s was rejected due to invalid configuration: %v", probe.GetNamespace(), probe.GetName(), err)
 		}
 
 		if err = probe.Spec.Targets.Validate(); err != nil {
@@ -671,7 +674,7 @@ func (rs *ResourceSelector) SelectScrapeConfigs(ctx context.Context, listFn List
 				"namespace", objMeta.GetNamespace(),
 				"prometheus", objMeta.GetName(),
 			)
-			rs.metrics.Recorder.Eventf(sc, v1.EventTypeWarning, "InvalidConfiguration", "ScrapeConfig %s/%s was rejected due to invalid configuration: %v", sc.GetNamespace(), sc.GetName(), err)
+			rs.recorder.Eventf(sc, v1.EventTypeWarning, "InvalidConfiguration", "ScrapeConfig %s/%s was rejected due to invalid configuration: %v", sc.GetNamespace(), sc.GetName(), err)
 		}
 
 		if err = validateRelabelConfigs(rs.p, sc.Spec.RelabelConfigs); err != nil {

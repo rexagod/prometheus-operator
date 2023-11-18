@@ -74,7 +74,7 @@ func (o *Operator) createOrUpdateRuleConfigMaps(ctx context.Context, t *monitori
 		return nil, fmt.Errorf("initializing PrometheusRules failed: %w", err)
 	}
 
-	newRules, rejected, err := promRuleSelector.Select(o.metrics.Recorder, namespaces)
+	newRules, rejected, err := promRuleSelector.Select(o.recorder, namespaces)
 	if err != nil {
 		return nil, fmt.Errorf("selecting PrometheusRules failed: %w", err)
 	}

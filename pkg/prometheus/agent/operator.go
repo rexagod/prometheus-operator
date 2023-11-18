@@ -17,6 +17,9 @@ package prometheusagent
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus-operator/prometheus-operator/pkg/client/versioned/scheme"
+	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 	"strings"
 	"time"
 
@@ -85,6 +88,8 @@ type Operator struct {
 	canReadStorageClass    bool
 
 	statusReporter prompkg.StatusReporter
+
+	recorder record.EventRecorder
 }
 
 // New creates a new controller.
@@ -116,16 +121,26 @@ func New(ctx context.Context, restConfig *rest.Config, conf operator.Config, log
 	// All the metrics exposed by the controller get the controller="prometheus-agent" label.
 	r = prometheus.WrapRegistererWith(prometheus.Labels{"controller": "prometheus-agent"}, r)
 
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartStructuredLogging(0)
+
+	// Exclude initialization when testing.
+	if client != nil {
+		eventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{Interface: client.CoreV1().Events("")})
+	}
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "prometheus-operator"})
+
 	c := &Operator{
 		kclient:               client,
 		mdClient:              mdClient,
 		mclient:               mclient,
 		logger:                logger,
 		config:                conf,
-		metrics:               operator.NewMetrics(client, r),
+		metrics:               operator.NewMetrics(r),
 		reconciliations:       &operator.ReconciliationTracker{},
 		scrapeConfigSupported: scrapeConfigSupported,
 		canReadStorageClass:   canReadStorageClass,
+		recorder:              recorder,
 	}
 	c.metrics.MustRegister(
 		c.reconciliations,
@@ -689,7 +704,7 @@ func (c *Operator) sync(ctx context.Context, key string) error {
 }
 
 func (c *Operator) createOrUpdateConfigurationSecret(ctx context.Context, p *monitoringv1alpha1.PrometheusAgent, cg *prompkg.ConfigGenerator, store *assets.Store) error {
-	resourceSelector := prompkg.NewResourceSelector(c.logger, p, store, c.nsMonInf, c.metrics)
+	resourceSelector := prompkg.NewResourceSelector(c.logger, p, store, c.nsMonInf, c.metrics, c.recorder)
 
 	smons, err := resourceSelector.SelectServiceMonitors(ctx, c.smonInfs.ListAllByNamespace)
 	if err != nil {
