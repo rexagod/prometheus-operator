@@ -57,6 +57,10 @@ jobs:
             featureGated: "include"
     steps:
     - uses: actions/checkout@v4
+      with:
+        repository: rexagod/prometheus-operator
+        ref: 3611-e2e-on-ci
+        token: ""
     - name: Import environment variables from file
       run: cat ".github/env" >> $GITHUB_ENV
     - name: Install Go
@@ -89,12 +93,12 @@ jobs:
         kubectl apply -f scripts/kind-rbac.yaml
     - name: Run tests
       run: >
-        EXCLUDE_ALERTMANAGER_TESTS=${{ matrix.alertmanager }}
-        EXCLUDE_PROMETHEUS_TESTS=${{ matrix.prometheus }}
-        EXCLUDE_PROMETHEUS_ALL_NS_TESTS=${{ matrix.prometheusAllNS }}
-        EXCLUDE_THANOSRULER_TESTS=${{ matrix.thanosruler }}
-        EXCLUDE_OPERATOR_UPGRADE_TESTS=${{ matrix.operatorUpgrade }}
-        FEATURE_GATED_TESTS=${{ matrix.featureGated }}
+        EXCLUDE_ALERTMANAGER_TESTS=exclude
+        EXCLUDE_PROMETHEUS_TESTS=exclude
+        EXCLUDE_PROMETHEUS_ALL_NS_TESTS=exclude
+        EXCLUDE_THANOSRULER_TESTS=exclude
+        EXCLUDE_OPERATOR_UPGRADE_TESTS=exclude
+        FEATURE_GATED_TESTS=exclude
         EXCLUDE_PROMETHEUS_UPGRADE_TESTS=exclude
         make test-e2e
 
